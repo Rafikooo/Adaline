@@ -1,46 +1,262 @@
 import numpy as np
-import random
+import pygame
+from keras.datasets import mnist
+from keras import models
+from keras.utils.np_utils import to_categorical
+from matplotlib import pyplot as plt
+import keras
 
-def fourier_transform(x):
-  a = np.abs(np.fft.fft(x))
-  a[0] = 0
-  return a/np.amax(a)
+(train_images, train_labels), (test_images, test_labels) = mnist.load_data()
 
+train_labels = to_categorical(train_labels)
+test_labels = to_categorical(test_labels)
+#
+# network = models.Sequential()
+# network.add(layers.Dense(512, activation='relu', input_shape=(28 * 28,)))
+# network.add(layers.Dense(10, activation='sigmoid'))
+# network.compile(optimizer='rmsprop',
+#                 loss='categorical_crossentropy',
+#                 metrics=['accuracy'])
 
-class Adaline(object):
+# Preprocessing training data
+train_images = train_images.reshape((train_images.shape[0], 28 * 28))
+train_images = train_images.astype('float32') / 255
 
-  def __init__(self, no_of_inputs, learning_rate=0.01, iterations=2000, sigma = True):
-    self.no_of_inputs = no_of_inputs
-    self.learning_rate = learning_rate
-    self.iterations = iterations
-    self.weights = np.random.random(2*self.no_of_inputs) # przypisujemy wagom male losowe wartosci
-    self.sigma = sigma
-    self.errors = []
+# Preprocessing test data
+test_images = test_images.reshape((test_images.shape[0], 28 * 28))
+test_images = test_images.astype('float32') / 225
 
-  def train(self, przyklad, odpowiedz):
-    for index in range(self.iterations):
-        e = 0
-        print(f"Epoch {index}/{self.iterations}")
+# network.fit(train_images, train_labels, epochs=5, batch_size=128)
+network = models.load_model('model')
 
-        for x, y in random.choices(list(zip(przyklad, odpowiedz))):
-            # losowo dobieramy przyklad uczący i odp
-            x = np.concatenate([x, fourier_transform(x)])
+# Calculate Test loss and Test Accuracy
+test_loss, test_acc = network.evaluate(test_images, test_labels)
+# network.save('./model')
+# Print Test loss and Test Accuracy
 
-            # obliczamy aktywacje jednostki na przedziale e=+1
-            out = self.output(x)
-
-            #korygujemy wagi
-            self.weights += self.learning_rate * (y - out) * x
-
-            e += (y - out) ** 2
-
-        self.errors.append(e)
-        print(f"Loss: {e}")
-
-  def _activation(self, x):
-      x = 0.8 * x + 0.1
-      return 1 / (1 + np.exp(-x))
+# ==============================================================================================================
+BIAS = 0
 
 
-  def output(self, x):
-    return self._activation(np.dot(self.weights, x))
+def activation(x):
+    return 1 / (1 + np.exp(-x))
+
+
+#
+# def activation(linear_output):
+#     return 1 if linear_output > 0 else -1
+
+
+class Adaline:
+    def __init__(self, n_inputs, classified_digit, eta=0.01, n_epoch=5):
+        self.weights = np.random.random(n_inputs + 1)
+        self.bias = np.random.random()
+        self.inputs = []
+        self.n_epoch = n_epoch
+        self.eta = eta
+        self.classified_digit = classified_digit
+
+    def fit(self, features, labels):
+        losss = []
+        idx = []
+        for index in range(self.n_epoch):
+            print(f"Epoch {index}/{self.n_epoch}")
+            # np.random.shuffle(features)
+            loss = 0
+            for i in range(features.shape[0]):
+                index = np.random.randint(0, len(features))
+                out = self.output(features[index])
+                self.weights[1:] += self.eta * (labels[index][self.classified_digit] - out) * features[i]
+                loss = (labels[i][self.classified_digit] - out) ** 2
+            losss.append(loss)
+            idx.append(index)
+
+            print(f"Loss: {loss}")
+            # plt.plot(index, losss)
+            self.print_accuracy()
+        plt.show()
+
+    def output(self, X):
+        return activation(np.dot(X, self.weights[1:]) + self.weights[BIAS])
+
+    def print_accuracy(self):
+        correct = 0
+        for feature, label in zip(test_images, test_labels):
+            output = self.output(feature)
+            if output == label[self.classified_digit]:
+                correct += 1
+        print(f"Test accuracy: {correct / len(test_images)}")
+
+
+perceptrons = []
+
+for i in range(10):
+    perceptrons.append(Adaline(784, i, n_epoch=5))
+for i, perceptron in enumerate(perceptrons):
+    perceptrons[i].fit(train_images, train_labels)
+
+n_samples = len(test_images)
+correct = 0
+for i, perceptron in enumerate(perceptrons):
+    correct = 0
+    for feature, label in zip(test_images, test_labels):
+        output = perceptron.output(feature)
+        output = 0 if output < 0.5 else 1
+        if output == label[0]:
+            correct += 1
+
+print(f"Result on test data: {correct}/{n_samples}")
+# for feature, label in zip(test_images, test_labels):
+#     adalines_guesses = 0
+#     for i, perceptron in enumerate(perceptrons):
+#         output = perceptron.output(feature)
+#         output = 0 if output < 0.5 else 1
+#         if output == label[0]:
+#             adalines_guesses += 1
+#     if adalines_guesses == len(perceptrons):
+#         correct += 1
+# print(f"Result on test data: {correct}/{n_samples}")
+
+
+# =========================== GUI ===================================
+
+
+
+WIDTH = 28 * 15
+ROWS = 28
+WINDOW = pygame.display.set_mode((WIDTH, WIDTH))
+pygame.display.set_caption('Digit Recognition')
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+GREY = (150, 150, 150)
+GREEN = (40, 250, 40)
+
+
+class Square:
+    def __init__(self, row, col, width, total_rows):
+        self.row = row
+        self.col = col
+        self.width = width
+        self.x = row * width
+        self.y = col * width
+        self.total_rows = total_rows
+        self.color = WHITE
+        self.neighbours = []
+
+    def get_pos(self):
+        return self.row, self.col
+
+    def isAlive(self):
+        return self.color == BLACK
+
+    def nnAlive(self):
+        if self.color == BLACK:
+            return 1
+        else:
+            return 0
+
+    def makeAlive(self):
+        self.color = BLACK
+
+    def makeDead(self):
+        self.color = WHITE
+
+    def draw(self, win):
+        pygame.draw.rect(win, self.color, (self.x, self.y, self.width, self.width))
+
+
+def makeGrid(rows, width):
+    grid = []
+    gap = width // rows
+    for i in range(rows):
+        grid.append([])
+        for j in range(rows):
+            square = Square(i, j, gap, rows)
+            grid[i].append(square)
+    return grid
+
+
+def drawGridlines(win, rows, width):
+    gap = width // rows
+    for i in range(rows):
+        pygame.draw.line(win, GREY, (0, i * gap), (width, i * gap))
+    for j in range(rows):
+        pygame.draw.line(win, GREY, (j * gap, 0), (j * gap, width))
+
+
+def draw(win, grid, rows, width):
+    win.fill(WHITE)
+    for row in grid:
+        for square in row:
+            square.draw(win)
+
+    drawGridlines(win, rows, width)
+    pygame.display.update()
+
+
+def get_clicked_position(mouse, rows, width):
+    gap = width // rows
+    y, x = mouse
+    row = y // gap
+    col = x // gap
+    return row, col
+
+
+def makeModel():
+    return keras.models.load_model('model')
+
+
+def nn_predict(grid, nn_running):
+    nn_running = True
+    inputX = []
+    for row in grid:
+        inputX.append([])
+        for col in row:
+            if col.nnAlive():
+                inputX[-1].append(0.5)
+            else:
+                inputX[-1].append(0)
+
+    # network.predict(np.array(inputX).reshape(784))
+    for i, perceptron in enumerate(perceptrons):
+        res = perceptron.output(np.array(inputX).reshape(784))
+        print(f"Ama bezceptron nr {i} and i think: {res}")
+    nn_running = False
+
+
+def main(win, width):
+    grid = makeGrid(ROWS, width)
+    run = True
+    nn_running = False
+
+    while run:
+        draw(win, grid, ROWS, width)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                run = False
+            elif nn_running != True and event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    nn_predict(grid, nn_running)
+
+            if not nn_running:
+                if pygame.mouse.get_pressed()[0]:
+                    pos = pygame.mouse.get_pos()
+                    row, col = get_clicked_position(pos, ROWS, width)
+                    if row < len(grid) and col < len(grid):
+                        square = grid[row][col]
+                        square.makeAlive()
+                elif pygame.mouse.get_pressed()[2]:
+                    pos = pygame.mouse.get_pos()
+                    row, col = get_clicked_position(pos, ROWS, width)
+                    if row < len(grid) and col < len(grid):
+                        square = grid[row][col]
+                        square.makeDead()
+
+    pygame.quit()
+
+
+WIDTH = 28 * 15
+ROWS = 28
+WINDOW = pygame.display.set_mode((WIDTH, WIDTH))
+
+main(WINDOW, WIDTH)
