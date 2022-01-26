@@ -31,7 +31,7 @@ network = models.load_model('model')
 
 # Calculate Test loss and Test Accuracy
 test_loss, test_acc = network.evaluate(test_images, test_labels)
-# network.save('./model')
+network.save('./model')
 # Print Test loss and Test Accuracy
 
 # ==============================================================================================================
@@ -39,16 +39,11 @@ BIAS = 0
 
 
 def activation(x):
-    return 1 / (1 + np.exp(-x))
-
-
-#
-# def activation(linear_output):
-#     return 1 if linear_output > 0 else -1
+    return x
 
 
 class Adaline:
-    def __init__(self, n_inputs, classified_digit, eta=0.01, n_epoch=5):
+    def __init__(self, n_inputs, classified_digit, eta=0.0001, n_epoch=5):
         self.weights = np.random.random(n_inputs + 1)
         self.bias = np.random.random()
         self.inputs = []
@@ -57,24 +52,17 @@ class Adaline:
         self.classified_digit = classified_digit
 
     def fit(self, features, labels):
-        losss = []
-        idx = []
-        for index in range(self.n_epoch):
-            print(f"Epoch {index}/{self.n_epoch}")
-            # np.random.shuffle(features)
+        print(f"Perceptron nr: {self.classified_digit}")
+        for epoch_index in range(self.n_epoch):
+            print(f"Epoch {epoch_index}/{self.n_epoch}")
             loss = 0
             for i in range(features.shape[0]):
-                index = np.random.randint(0, len(features))
-                out = self.output(features[index])
-                self.weights[1:] += self.eta * (labels[index][self.classified_digit] - out) * features[i]
-                loss = (labels[i][self.classified_digit] - out) ** 2
-            losss.append(loss)
-            idx.append(index)
+                random_index = np.random.randint(0, len(features))
+                out = self.output(features[random_index])
+                self.weights[1:] += self.eta * (labels[random_index][self.classified_digit] - out) * features[random_index]
+                loss += (labels[i][self.classified_digit] - out) ** 2
 
-            print(f"Loss: {loss}")
-            # plt.plot(index, losss)
-            self.print_accuracy()
-        plt.show()
+            print(f"Loss: {loss/features.shape[0]}")
 
     def output(self, X):
         return activation(np.dot(X, self.weights[1:]) + self.weights[BIAS])
@@ -97,25 +85,17 @@ for i, perceptron in enumerate(perceptrons):
 
 n_samples = len(test_images)
 correct = 0
-for i, perceptron in enumerate(perceptrons):
-    correct = 0
-    for feature, label in zip(test_images, test_labels):
+
+for feature, label in zip(test_images, test_labels):
+    adalines_guesses = []
+    for i, perceptron in enumerate(perceptrons):
         output = perceptron.output(feature)
-        output = 0 if output < 0.5 else 1
-        if output == label[0]:
-            correct += 1
+        adalines_guesses.append(output)
+    best = adalines_guesses.index(np.max(adalines_guesses))
+    if label[best] == 1:
+        correct += 1
 
 print(f"Result on test data: {correct}/{n_samples}")
-# for feature, label in zip(test_images, test_labels):
-#     adalines_guesses = 0
-#     for i, perceptron in enumerate(perceptrons):
-#         output = perceptron.output(feature)
-#         output = 0 if output < 0.5 else 1
-#         if output == label[0]:
-#             adalines_guesses += 1
-#     if adalines_guesses == len(perceptrons):
-#         correct += 1
-# print(f"Result on test data: {correct}/{n_samples}")
 
 
 # =========================== GUI ===================================
